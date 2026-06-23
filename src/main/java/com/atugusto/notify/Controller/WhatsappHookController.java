@@ -58,6 +58,9 @@ public class WhatsappHookController {
         logWebhookStatus(value); // log de estado de webhook en meta
         processTextMessage(value, message); //
         logInteractivePayload(payload, message);
+        if(menumemory.containsKey(message.from)){
+            messageService.sendMessageConfirm(new messageTO(value.metadata.phone_number_id, message.from, message.text.body),menumemory)
+        }
 
         return ResponseEntity.ok(EVENT_RECEIVED_RESPONSE);
     }
@@ -150,7 +153,7 @@ public class WhatsappHookController {
     }
 
     private void saveMemoryMenu(String from,Platos plato) {
-        if(menumemory.containsKey(from)){
+        if(!menumemory.containsKey(from)){
             List<Platos> platos = new ArrayList<>();
             platos.add(plato);
 

@@ -1,5 +1,6 @@
 package com.atugusto.notify.Service;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -51,7 +52,29 @@ public class MessageService {
                         .bodyToMono(String.class));
     }
 
+    public Mono<String> sendMessageConfirm(messageTO message,HashMap<String,List<Platos>> memory){
+        if (metaWhatsappToken == null || metaWhatsappToken.isBlank()) {
+            return Mono.error(new IllegalStateException("META_WHATSAPP_TOKEN is not configured"));
+        }
 
+        return Mono.fromCallable(() -> sendMessageTemplateConfirmed(message,memory))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(body -> webclient.post()
+                        .uri(String.format("https://graph.facebook.com/v25.0/%s/messages", message.getPhone_number_id()))
+                        .headers(headers -> {
+                            headers.setBearerAuth(metaWhatsappToken);
+                            headers.setContentType(MediaType.APPLICATION_JSON);
+                        })
+                        .bodyValue(body)
+                        .retrieve()
+                        .onStatus(status -> status.isError(),
+                                response -> response.bodyToMono(String.class)
+                                        .map(bodyResponse -> new RuntimeException("Error: " + bodyResponse)))
+                        .bodyToMono(String.class));
+
+    }
+
+    
     private Map<String, Object> sendMessageTemplate(messageTO message) {
 
     Map<String, Object> body = Map.of(
@@ -113,6 +136,48 @@ public class MessageService {
                                                 "title", "Platos disponibles",
                                                 "rows", rows
                                         )
+                                )
+                        )
+                )
+        );
+        return body;
+    }
+
+
+    private Map<String,Object> sendMessageTemplateConfirmed(messageTO message,HashMap<String,List<Platos>> menuschoosed){
+        String menulist = menuschoosed.get(message.getPhoneNumber()).stream().map(Platos::getDescripcion).collect(Collectors.joining("\n• ", "• ", ""));
+        
+        
+
+        Map<String, Object> body = Map.of(
+                "messaging_product", "whatsapp",
+                "to", message.getPhoneNumber(),
+                "type", "interactive",
+                "interactive", Map.of(
+                        "type", "list",
+                        "body", Map.of(
+                                "text", "🍽️ Menú escogido: "+menulist
+                        ),
+                        "action", Map.of(
+                                "button", "Ver platos",
+                                "sections", List.of(
+                                        Map.of(
+                                        "title", "Pedido",
+                                        "rows", List.of(
+                                                Map.of(
+                                                        "id", "CONFIRMAR",
+                                                        "title", "✅ Confirmar pedido"
+                                                ),
+                                                Map.of(
+                                                        "id", "AGREGAR",
+                                                        "title", "➕ Agregar otro plato"
+                                                ),
+                                                Map.of(
+                                                        "id", "CANCELAR",
+                                                        "title", "❌ Cancelar pedido"
+                                                )
+                                        )
+                                )
                                 )
                         )
                 )
