@@ -93,4 +93,11 @@ public class Platos {
         this.disponible = disponible;
     }
 
+    @Override
+    public String toString() {
+        return "Platos [id=" + id + ", nombre=" + nombre + ", categoria=" + categoria + ", descripcion=" + descripcion
+                + ", precio=" + precio + ", disponible=" + disponible + "]";
+    }
+
+
 }

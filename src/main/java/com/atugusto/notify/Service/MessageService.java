@@ -5,11 +5,15 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import com.atugusto.notify.DTO.messageTO;
 import com.atugusto.notify.Entity.Platos;
+
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 @Service
 public class MessageService {
@@ -20,31 +24,31 @@ public class MessageService {
     public MessageService(
             WebClient webclient,
             PlatosService platosService,
-            @Value("${META_WHATSAPP_TOKEN:}") String metaWhatsappToken) {
+            @Value("${meta.whatsapp.token:}") String metaWhatsappToken) {
         this.webclient = webclient;
         this.platosService = platosService;
         this.metaWhatsappToken = metaWhatsappToken;
     }
 
-    public String sendMessage(messageTO message) {
+    public Mono<String> sendMessage(messageTO message) {
         if (metaWhatsappToken == null || metaWhatsappToken.isBlank()) {
-            throw new IllegalStateException("META_WHATSAPP_TOKEN is not configured");
+            return Mono.error(new IllegalStateException("META_WHATSAPP_TOKEN is not configured"));
         }
 
-        return webclient.post()
-                .uri(String.format("https://graph.facebook.com/v25.0/%s/messages", message.getPhone_number_id()))
-                .headers(headers -> {
-                    headers.setBearerAuth(metaWhatsappToken);
-                    headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
-                        }
-                )
-                .bodyValue(sendMessageTemplateWithPlatos(message))
-                .retrieve()
-                .onStatus(status -> status.isError(),
-                        response -> response.bodyToMono(String.class).map(body -> new RuntimeException("Error: " + body)))
-                .bodyToMono(String.class)
-                .block();
-        
+        return Mono.fromCallable(() -> sendMessageTemplateWithPlatos(message))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(body -> webclient.post()
+                        .uri(String.format("https://graph.facebook.com/v25.0/%s/messages", message.getPhone_number_id()))
+                        .headers(headers -> {
+                            headers.setBearerAuth(metaWhatsappToken);
+                            headers.setContentType(MediaType.APPLICATION_JSON);
+                        })
+                        .bodyValue(body)
+                        .retrieve()
+                        .onStatus(status -> status.isError(),
+                                response -> response.bodyToMono(String.class)
+                                        .map(bodyResponse -> new RuntimeException("Error: " + bodyResponse)))
+                        .bodyToMono(String.class));
     }
 
 
@@ -88,6 +92,7 @@ public class MessageService {
                 .map(plato -> Map.of(
                         "id", String.valueOf(plato.getId()),
                         "title", plato.getNombre(),
+                        //"precio", String.valueOf(plato.getPrecio()),
                         "description", String.format("%s - S/ %.2f", plato.getDescripcion(), plato.getPrecio())
                 ))
                 .collect(Collectors.toList());

@@ -29,7 +29,12 @@ public class PlatosService{
     public String getPlatosCantidad(){
         return String.valueOf(platosRepository.count());
     }
+
+    public Platos findIDPlatos(Long ID){
+        return platosRepository.findById(ID).orElse(null);
     }
+
+}
 
 
 

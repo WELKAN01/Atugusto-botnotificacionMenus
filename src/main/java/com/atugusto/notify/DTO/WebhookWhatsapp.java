@@ -48,6 +48,7 @@ public class WebhookWhatsapp {
     public static class ListReply {
         public String id;                 // ID del plato elegido
         public String title;              // Nombre del plato
+        public String precio;
         public String description;
     }
 
