@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -14,18 +15,26 @@ import com.atugusto.notify.Entity.Platos;
 public class MessageService {
     private final WebClient webclient;
     private final PlatosService platosService;
+    private final String metaWhatsappToken;
 
-    public MessageService(WebClient webclient, PlatosService platosService) {
+    public MessageService(
+            WebClient webclient,
+            PlatosService platosService,
+            @Value("${META_WHATSAPP_TOKEN:}") String metaWhatsappToken) {
         this.webclient = webclient;
         this.platosService = platosService;
+        this.metaWhatsappToken = metaWhatsappToken;
     }
 
     public String sendMessage(messageTO message) {
+        if (metaWhatsappToken == null || metaWhatsappToken.isBlank()) {
+            throw new IllegalStateException("META_WHATSAPP_TOKEN is not configured");
+        }
 
         return webclient.post()
                 .uri(String.format("https://graph.facebook.com/v25.0/%s/messages", message.getPhone_number_id()))
                 .headers(headers -> {
-                    headers.setBearerAuth("EAAUy52IkCTEBRWPYuN4stFcOIEvXgulL4qCZCOSntYGZC2Ref34OQIo3nqZAlyPg30OF3YNEhsWmpTs5y3nde3DX8MiO4QJqp0at0D0iU6LsZAgHAS0gbbP8cQZBGcb1UxaksZAIRG7gg4F0zGGrsSoZChS6ZBgNtoXwoYa0hWZB7awfog1rSgzPK64BJTeBBgJTAMFXglzUQBntrBrxZAsXjtJRP9jpkE5bkFqRfEDw1de71fLtCXjhze6Q4wj68ZCQPy4UL15Jleb87aUnVLuaCIbN5i9tgZDZD");
+                    headers.setBearerAuth(metaWhatsappToken);
                     headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
                         }
                 )

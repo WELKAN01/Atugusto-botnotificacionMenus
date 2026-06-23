@@ -7,10 +7,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 
-import com.atugusto.notify.Controller.mcp.tools.PlatosToolsMCP;
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Service.PlatosService;
-import com.atugusto.notify.Service.IAService.IAService;
 
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,11 +22,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RequestMapping("/platos")
 public class Platoscontroller {
     private final PlatosService platosService;
-    private final IAService iaService;
 
-    public Platoscontroller(PlatosService platosService, IAService iaService) {
+    public Platoscontroller(PlatosService platosService) {
         this.platosService = platosService;
-        this.iaService = iaService;
     }
     
     @GetMapping()
@@ -43,9 +39,9 @@ public class Platoscontroller {
     }
 
 
-    @GetMapping("ai/cantidad")
-    public String getPlatosCantidad(@RequestBody Map<String, String> request) {
-        return iaService.ask(request.get("message"));
-    }
+    // @GetMapping("ai/cantidad")
+    // public String getPlatosCantidad(@RequestBody Map<String, String> request) {
+    //     return iaService.ask(request.get("message"));
+    // }
     
 }
