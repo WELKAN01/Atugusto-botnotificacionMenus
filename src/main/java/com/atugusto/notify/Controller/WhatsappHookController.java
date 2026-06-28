@@ -51,15 +51,44 @@ public class WhatsappHookController {
     @PostMapping
     public ResponseEntity<String> receiveWebhook(@RequestBody WebhookWhatsapp payload) {
         logger.info("WhatsApp webhook received");
-        
+
         Value value = getFirstValue(payload);
         Message message = getFirstMessage(value);
 
-        logWebhookStatus(value); // log de estado de webhook en meta
-        processTextMessage(value, message); //
-        logInteractivePayload(payload, message);
-        if(menumemory.containsKey(message.from)){
-            messageService.sendMessageConfirm(new messageTO(value.metadata.phone_number_id, message.from, message.text.body),menumemory)
+        logWebhookStatus(value);
+
+        // Eventos de status (delivered, read) no traen mensaje
+        if (message == null) {
+            return ResponseEntity.ok(EVENT_RECEIVED_RESPONSE);
+        }
+
+        // Mensaje interactivo (selección de plato del menú)
+        if ("interactive".equals(message.type)) {
+            logInteractivePayload(payload, message);
+            if (menumemory.containsKey(message.from)) {
+                messageService.sendMessageConfirm(
+                    new messageTO(value.metadata.phone_number_id, message.from, null),
+                    menumemory
+                ).subscribe(
+                    response -> logger.info("Confirm enviado a {}", message.from),
+                    error -> logger.error("Error enviando confirm a {}", message.from, error)
+                );
+            }
+            return ResponseEntity.ok(EVENT_RECEIVED_RESPONSE);
+        }
+
+        // Mensaje de texto normal
+        if ("text".equals(message.type)) {
+            processTextMessage(value, message);
+            if (menumemory.containsKey(message.from) && message.text != null) {
+                messageService.sendMessageConfirm(
+                    new messageTO(value.metadata.phone_number_id, message.from, message.text.body),
+                    menumemory
+                ).subscribe(
+                    response -> logger.info("Confirm enviado a {}", message.from),
+                    error -> logger.error("Error enviando confirm a {}", message.from, error)
+                );
+            }
         }
 
         return ResponseEntity.ok(EVENT_RECEIVED_RESPONSE);
@@ -152,16 +181,18 @@ public class WhatsappHookController {
         }
     }
 
-    private void saveMemoryMenu(String from,Platos plato) {
-        if(!menumemory.containsKey(from)){
-            List<Platos> platos = new ArrayList<>();
-            platos.add(plato);
+    private void saveMemoryMenu(String from, Platos plato) {
+        List<Platos> platos = menumemory.computeIfAbsent(from, k -> new ArrayList<>());
 
-            menumemory.put(from, platos);
-        }else{
-            menumemory.get(from).add(plato);
-            logger.info("se agrego un nuevo plato. lista de pedido : {}",menumemory.get(from).toString());
+        // 🔒 Evitar agregar el mismo plato si ya fue registrado (deduplicación por id)
+        boolean yaExiste = platos.stream()
+            .anyMatch(p -> p.getId().equals(plato.getId()));
+
+        if (!yaExiste) {
+            platos.add(plato);
+            logger.info("Plato agregado. Lista de pedido: {}", platos);
+        } else {
+            logger.info("Plato ya registrado, ignorando duplicado: {}", plato.getNombre());
         }
-        return ;
     }
 }
