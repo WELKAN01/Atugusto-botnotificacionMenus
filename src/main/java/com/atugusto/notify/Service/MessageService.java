@@ -1,10 +1,11 @@
-package com.atugusto.notify.Service;
+﻿package com.atugusto.notify.Service;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -12,23 +13,28 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import com.atugusto.notify.DTO.messageTO;
 import com.atugusto.notify.Entity.Platos;
+import com.atugusto.notify.Message.MensajeConfirmacion;
 
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 @Service
 public class MessageService {
+    private static final Logger logger = LoggerFactory.getLogger(MessageService.class);
     private final WebClient webclient;
     private final PlatosService platosService;
     private final String metaWhatsappToken;
+    private final PlatosDiariosService platosDiariosService;
 
     public MessageService(
             WebClient webclient,
             PlatosService platosService,
-            @Value("${meta.whatsapp.token:}") String metaWhatsappToken) {
+            @Value("${meta.whatsapp.token:}") String metaWhatsappToken,
+            PlatosDiariosService platosDiariosService) {
         this.webclient = webclient;
         this.platosService = platosService;
         this.metaWhatsappToken = metaWhatsappToken;
+        this.platosDiariosService = platosDiariosService;
     }
 
     public Mono<String> sendMessage(messageTO message) {
@@ -52,7 +58,7 @@ public class MessageService {
                         .bodyToMono(String.class));
     }
 
-    public Mono<String> sendMessageConfirm(messageTO message,HashMap<String,List<Platos>> memory){
+    public Mono<String> sendMessageConfirm(messageTO message, Map<String, List<Platos>> memory){
         if (metaWhatsappToken == null || metaWhatsappToken.isBlank()) {
             return Mono.error(new IllegalStateException("META_WHATSAPP_TOKEN is not configured"));
         }
@@ -108,9 +114,11 @@ public class MessageService {
 
     private Map<String, Object> sendMessageTemplateWithPlatos(messageTO message) {
         // Obtener platos disponibles desde la base de datos
-        List<Platos> platosDisponibles = platosService.findPlatosDisponibles();
-        
+        logger.info("Obteniendo platos disponibles para el día de hoy.");
+        List<Platos> platosDisponibles = platosDiariosService.PlatosDiariosListToday();
+        //List<Platos> platosDisponibles = platosService.findPlatosDisponibles();
         // Construir dinámicamente la lista de platos
+        logger.info("Platos disponibles: {}", platosDisponibles.stream().map(Platos::getNombre).collect(Collectors.joining(", ")));
         List<Map<String, String>> rows = platosDisponibles.stream()
                 .map(plato -> Map.of(
                         "id", String.valueOf(plato.getId()),
@@ -144,7 +152,7 @@ public class MessageService {
     }
 
 
-    private Map<String,Object> sendMessageTemplateConfirmed(messageTO message,HashMap<String,List<Platos>> menuschoosed){
+    private Map<String,Object> sendMessageTemplateConfirmed(messageTO message, Map<String, List<Platos>> menuschoosed){
         String menulist = menuschoosed.get(message.getPhoneNumber()).stream().map(Platos::getDescripcion).collect(Collectors.joining("\n• ", "• ", ""));
         
         
@@ -159,24 +167,11 @@ public class MessageService {
                                 "text", "🍽️ Menú escogido: "+menulist
                         ),
                         "action", Map.of(
-                                "button", "Ver platos",
+                                "button", "¿que realizar?",
                                 "sections", List.of(
                                         Map.of(
                                         "title", "Pedido",
-                                        "rows", List.of(
-                                                Map.of(
-                                                        "id", "CONFIRMAR",
-                                                        "title", "✅ Confirmar pedido"
-                                                ),
-                                                Map.of(
-                                                        "id", "AGREGAR",
-                                                        "title", "➕ Agregar otro plato"
-                                                ),
-                                                Map.of(
-                                                        "id", "CANCELAR",
-                                                        "title", "❌ Cancelar pedido"
-                                                )
-                                        )
+                                        "rows", MensajeConfirmacion.obtenerLista()
                                 )
                                 )
                         )

@@ -19,8 +19,11 @@ import com.atugusto.notify.DTO.messageTO;
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Message.MensajeConfirmacion;
 import com.atugusto.notify.Service.MessageService;
+import com.atugusto.notify.Service.PlatosDiariosService;
 import com.atugusto.notify.Service.PlatosService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import reactor.core.publisher.Mono;
 
 @Service
 public class WhatsappWebhookService {
@@ -31,17 +34,20 @@ public class WhatsappWebhookService {
     private final MessageService messageService;
     private final ObjectMapper objectMapper;
     private final PlatosService platosService;
+    private final PlatosDiariosService platosDiariosService;
 
     public WhatsappWebhookService(
             MessageService messageService,
             ObjectMapper objectMapper,
-            PlatosService platosService) {
+            PlatosService platosService,
+            PlatosDiariosService platoDiarioService) {
         this.messageService = messageService;
         this.objectMapper = objectMapper;
         this.platosService = platosService;
+        this.platosDiariosService = platoDiarioService;
     }
 
-    public String processWebhook(WebhookWhatsapp payload) {
+    public Mono<String> processWebhook(WebhookWhatsapp payload) {
         logger.info("WhatsApp webhook received");
 
         Value value = getFirstValue(payload);
@@ -50,7 +56,7 @@ public class WhatsappWebhookService {
         logWebhookStatus(value);
 
         if (message == null) {
-            return EVENT_RECEIVED_RESPONSE;
+            return Mono.just(EVENT_RECEIVED_RESPONSE);
         }
 
         if ("interactive".equals(message.type)) {
@@ -58,7 +64,7 @@ public class WhatsappWebhookService {
             handleConfirmationAction(message.interactive.list_reply.id,value,message);
             processInteractiveMessage(payload, value, message);
             
-            return EVENT_RECEIVED_RESPONSE;
+            return Mono.just(EVENT_RECEIVED_RESPONSE);
         }
 
         if ("text".equals(message.type)) {
@@ -67,7 +73,7 @@ public class WhatsappWebhookService {
             sendConfirmationIfOrderExists(value, message);
         }
 
-        return EVENT_RECEIVED_RESPONSE;
+        return Mono.just(EVENT_RECEIVED_RESPONSE);
     }
 
     private void handleConfirmationAction(String action, Value value, Message message) {
