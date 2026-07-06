@@ -1,17 +1,24 @@
 package com.atugusto.notify.Repository;
 
-import java.util.List;
-
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Entity.PlatosDiarios;
+import java.time.LocalDate;
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-public interface PlatoDiariosRepository extends JpaRepository<PlatosDiarios, Long>{
+public interface PlatoDiariosRepository extends ReactiveCrudRepository<PlatosDiarios, Long> {
 
-    @Query("SELECT pd.platos FROM PlatosDiarios pd WHERE pd.fec_menu_pedido = CURRENT_DATE")
+    @Query("""
+            SELECT p.*
+            FROM platos_diarios pd
+            JOIN platos p ON p.id = pd.plato_id
+            WHERE pd.fec_menu_pedido = :fecha
+              AND pd.disponible = true
+            """)
+    Flux<Platos> findPlatosHoy(@Param("fecha") LocalDate fecha);
 
-    List<Platos> findPlatosHoy();
-        
+    Mono<Boolean> existsByFecMenuPedido(LocalDate fecMenuPedido);
 }

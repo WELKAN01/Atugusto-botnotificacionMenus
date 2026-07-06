@@ -1,12 +1,12 @@
 package com.atugusto.notify.Service;
 
-import java.util.List;
-
-import org.springframework.stereotype.Service;
-
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Entity.PlatosDiarios;
 import com.atugusto.notify.Repository.PlatoDiariosRepository;
+import java.time.LocalDate;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @Service
 public class PlatosDiariosService {
@@ -17,16 +17,19 @@ public class PlatosDiariosService {
         this.platosdiariosrepository = platoDiariosRepository;
     }
 
-    public List<Platos> PlatosDiariosListToday(){
-        return platosdiariosrepository.findPlatosHoy();
+    public Flux<Platos> platosDiariosListToday() {
+        return platosdiariosrepository.findPlatosHoy(LocalDate.now());
     }
 
-
-    public  List<PlatosDiarios> PlatosDiariosListAll(){
+    public Flux<PlatosDiarios> platosDiariosListAll() {
         return platosdiariosrepository.findAll();
     }
 
-    public void platosDiariosSave(PlatosDiarios pd){
-        platosdiariosrepository.save(pd);
+    public Mono<PlatosDiarios> platosDiariosSave(PlatosDiarios pd) {
+        return platosdiariosrepository.save(pd);
+    }
+
+    public Mono<Boolean> existsMenuForDate(LocalDate date) {
+        return platosdiariosrepository.existsByFecMenuPedido(date);
     }
 }

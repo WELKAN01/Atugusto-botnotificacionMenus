@@ -1,8 +1,5 @@
 package com.atugusto.notify.Controller;
 
-import java.util.concurrent.ConcurrentHashMap;
-
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,29 +26,20 @@ public class WhatsappHookController {
 
     @PostMapping
     public Mono<ResponseEntity<String>> receiveWebhook(@RequestBody WebhookWhatsapp payload) {
-        return Mono.just(payload)
-                .flatMap(whatsappWebhookService::processWebhook)
-                .map(ResponseEntity::ok)
-                .defaultIfEmpty(ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(
-                        new ConcurrentHashMap<String, String>() {{
-                        put("statusCode", HttpStatus.BAD_REQUEST.toString());
-                        put("error", "Invalid payload");
-                        put("payload", payload.toString());
-                    }}
-                .toString()));
+        return whatsappWebhookService.processWebhook(payload)
+                .map(ResponseEntity::ok);
     }
 
     @GetMapping
-    public ResponseEntity<Mono<String>> verifyWebhook(
+    public Mono<ResponseEntity<String>> verifyWebhook(
             @RequestParam("hub.mode") String mode,
             @RequestParam("hub.verify_token") String token,
             @RequestParam("hub.challenge") String challenge) {
 
         if ("subscribe".equals(mode) && VERIFY_TOKEN.equals(token)) {
-            return ResponseEntity.ok(Mono.just(challenge));
+            return Mono.just(ResponseEntity.ok(challenge));
         }
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Mono.just("Error"));
+        return Mono.just(ResponseEntity.status(403).body("Error"));
     }
 }

@@ -1,17 +1,5 @@
 package com.atugusto.notify.Business;
 
-import java.text.Normalizer;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
-
 import com.atugusto.notify.DTO.WebhookWhatsapp;
 import com.atugusto.notify.DTO.WebhookWhatsapp.Change;
 import com.atugusto.notify.DTO.WebhookWhatsapp.Entry;
@@ -21,10 +9,18 @@ import com.atugusto.notify.DTO.messageTO;
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Message.MensajeConfirmacion;
 import com.atugusto.notify.Service.MessageService;
-import com.atugusto.notify.Service.PlatosDiariosService;
 import com.atugusto.notify.Service.PlatosService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
+import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -36,17 +32,14 @@ public class WhatsappWebhookService {
     private final MessageService messageService;
     private final ObjectMapper objectMapper;
     private final PlatosService platosService;
-    private final PlatosDiariosService platosDiariosService;
 
     public WhatsappWebhookService(
             MessageService messageService,
             ObjectMapper objectMapper,
-            PlatosService platosService,
-            PlatosDiariosService platoDiarioService) {
+            PlatosService platosService) {
         this.messageService = messageService;
         this.objectMapper = objectMapper;
         this.platosService = platosService;
-        this.platosDiariosService = platoDiarioService;
     }
 
     public Mono<String> processWebhook(WebhookWhatsapp payload) {
@@ -62,39 +55,68 @@ public class WhatsappWebhookService {
         }
 
         if ("interactive".equals(message.type)) {
-            //if(message.interactive.list_reply.id)
-            handleConfirmationAction(message.interactive.list_reply.id,value,message);
-            processInteractiveMessage(payload, value, message);
-            
-            return Mono.just(EVENT_RECEIVED_RESPONSE);
+            return processInteractiveMessage(payload, value, message)
+                    .thenReturn(EVENT_RECEIVED_RESPONSE);
         }
 
         if ("text".equals(message.type)) {
-            processTextMessage(value, message);
+            return processTextMessage(value, message)
+                    .thenReturn(EVENT_RECEIVED_RESPONSE);
         }
 
         return Mono.just(EVENT_RECEIVED_RESPONSE);
     }
 
-    private void handleConfirmationAction(String action, Value value, Message message) {
-        if(action==null){
-            return ;
-        }
-        switch (action) {
-            case MensajeConfirmacion.AGREGAR:
-                handleAgregar(value, message);
-                break;
-            case MensajeConfirmacion.CONFIRMAR:
-                handleConfirmar(value, message);
-                break;
-            
-            case MensajeConfirmacion.CANCELAR:
-                handleCancelar(message);
-                break;
+    private Mono<Void> processInteractiveMessage(WebhookWhatsapp payload, Value value, Message message) {
+        String action = message.interactive != null && message.interactive.list_reply != null
+                ? message.interactive.list_reply.id
+                : null;
 
-            default:
-                logger.warn("No es un mensaje de confirmacion: {}",action);
+        if (MensajeConfirmacion.AGREGAR.equals(action)) {
+            return handleAgregar(value, message);
         }
+
+        if (MensajeConfirmacion.CONFIRMAR.equals(action)) {
+            return handleConfirmar(message);
+        }
+
+        if (MensajeConfirmacion.CANCELAR.equals(action)) {
+            return handleCancelar(message);
+        }
+
+        return logInteractivePayload(payload, message)
+                .flatMap(plato -> saveMemoryMenu(message.from, plato))
+                .then(sendConfirmationIfOrderExists(value, message));
+    }
+
+    private Mono<Void> processTextMessage(Value value, Message message) {
+        if (value == null || message == null || message.text == null) {
+            return Mono.empty();
+        }
+
+        String phoneNumberId = value.metadata != null ? value.metadata.phone_number_id : null;
+        String from = message.from;
+        String messageText = message.text.body;
+
+        if (!StringUtils.hasText(phoneNumberId) || !StringUtils.hasText(from) || !StringUtils.hasText(messageText)) {
+            logger.warn("Incomplete WhatsApp text message. phoneNumberId={}, from={}, timestamp={}",
+                    phoneNumberId, from, message.timestamp);
+            return Mono.empty();
+        }
+
+        logger.info("WhatsApp text message received. from={}, phoneNumberId={}, timestamp={}",
+                from, phoneNumberId, message.timestamp);
+
+        if (!isMenuRequest(messageText)) {
+            logger.info("Text message does not request menu. from={}, text={}", from, messageText);
+            return Mono.empty();
+        }
+
+        logger.info("Menu requested by {}", from);
+        return messageService.sendMessage(new messageTO(phoneNumberId, from, messageText))
+                .doOnNext(response -> logger.info("WhatsApp response sent to {}. Meta response={}", from, response))
+                .doOnError(exception -> logger.error("Error sending WhatsApp response to {}", from, exception))
+                .then();
     }
 
     private Value getFirstValue(WebhookWhatsapp payload) {
@@ -128,41 +150,6 @@ public class WhatsappWebhookService {
         logger.debug("WhatsApp webhook without statuses");
     }
 
-    private void processInteractiveMessage(WebhookWhatsapp payload, Value value, Message message) {
-        logInteractivePayload(payload, message);
-        sendConfirmationIfOrderExists(value, message);
-    }
-
-    private void processTextMessage(Value value, Message message) {
-        if (value == null || message == null || message.text == null) {
-            return;
-        }
-
-        String phoneNumberId = value.metadata != null ? value.metadata.phone_number_id : null;
-        String from = message.from;
-        String messageText = message.text.body;
-
-        if (!StringUtils.hasText(phoneNumberId) || !StringUtils.hasText(from) || !StringUtils.hasText(messageText)) {
-            logger.warn("Incomplete WhatsApp text message. phoneNumberId={}, from={}, timestamp={}",
-                    phoneNumberId, from, message.timestamp);
-            return;
-        }
-
-        logger.info("WhatsApp text message received. from={}, phoneNumberId={}, timestamp={}",
-                from, phoneNumberId, message.timestamp);
-
-        if (!isMenuRequest(messageText)) {
-            logger.info("Text message does not request menu. from={}, text={}", from, messageText);
-            return;
-        }
-
-        logger.info("Menu requested by {}", from);
-        messageService.sendMessage(new messageTO(phoneNumberId, from, messageText))
-                .subscribe(
-                        response -> logger.info("WhatsApp response sent to {}. Meta response={}", from, response),
-                        exception -> logger.error("Error sending WhatsApp response to {}", from, exception));
-    }
-
     private boolean isMenuRequest(String messageText) {
         String normalizedText = Normalizer.normalize(messageText, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
@@ -178,30 +165,47 @@ public class WhatsappWebhookService {
                 || normalizedText.equals("quiero ver el menu");
     }
 
-    private void logInteractivePayload(WebhookWhatsapp payload, Message message) {
-        if (message == null || message.interactive == null) {
-            return;
+    private Mono<Platos> logInteractivePayload(WebhookWhatsapp payload, Message message) {
+        if (message == null || message.interactive == null || message.interactive.list_reply == null) {
+            return Mono.empty();
         }
 
         try {
             String selectedMenu = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(payload);
             logger.info("Interactive WhatsApp payload received:\n{}", selectedMenu);
-            Platos plato = platosService.findIDPlatos(Long.valueOf(message.interactive.list_reply.id));
             logger.info("menu seleccionado : {} ,descripcion {} , precio {}",
                     message.interactive.list_reply.title,
                     message.interactive.list_reply.description,
                     message.interactive.list_reply.precio);
-            saveMemoryMenu(message.from, plato);
         } catch (Exception exception) {
             logger.error("Error logging interactive WhatsApp payload", exception);
         }
+
+        return parsePlatoId(message.interactive.list_reply.id)
+                .flatMap(platosService::findIDPlatos)
+                .doOnNext(plato -> logger.info("Plato seleccionado cargado desde BD: {}", plato.getNombre()))
+                .switchIfEmpty(Mono.defer(() -> {
+                    logger.warn("No se encontro plato para id {}", message.interactive.list_reply.id);
+                    return Mono.empty();
+                }));
     }
 
-    private void saveMemoryMenu(String from, Platos plato) {
-        List<Platos> platos = menuMemory.computeIfAbsent(from, key -> new ArrayList<>());
+    private Mono<Long> parsePlatoId(String platoId) {
+        try {
+            return Mono.just(Long.valueOf(platoId));
+        } catch (NumberFormatException exception) {
+            logger.warn("El id recibido no corresponde a un plato persistido: {}", platoId);
+            return Mono.empty();
+        }
+    }
 
-        boolean yaExiste = platos.stream()
-                .anyMatch(item -> item.getId().equals(plato.getId()));
+    private Mono<Void> saveMemoryMenu(String from, Platos plato) {
+        if (plato == null) {
+            return Mono.empty();
+        }
+
+        List<Platos> platos = menuMemory.computeIfAbsent(from, key -> new ArrayList<>());
+        boolean yaExiste = platos.stream().anyMatch(item -> item.getId().equals(plato.getId()));
 
         if (!yaExiste) {
             platos.add(plato);
@@ -209,43 +213,39 @@ public class WhatsappWebhookService {
         } else {
             logger.info("Plato ya registrado, ignorando duplicado: {}", plato.getNombre());
         }
+
+        return Mono.empty();
     }
 
-    private void sendConfirmationIfOrderExists(Value value, Message message) {
+    private Mono<Void> sendConfirmationIfOrderExists(Value value, Message message) {
         if (value == null || value.metadata == null || message == null || !menuMemory.containsKey(message.from)) {
-            return;
+            return Mono.empty();
         }
 
-        messageService.sendMessageConfirm(
-                new messageTO(value.metadata.phone_number_id, message.from, null),
-                menuMemory)
-                .subscribe(
-                        response -> logger.info("Confirm enviado a {}", message.from),
-                        error -> logger.error("Error enviando confirm a {}", message.from, error));
+        return messageService.sendMessageConfirm(
+                        new messageTO(value.metadata.phone_number_id, message.from, null),
+                        menuMemory)
+                .doOnNext(response -> logger.info("Confirm enviado a {}", message.from))
+                .doOnError(error -> logger.error("Error enviando confirm a {}", message.from, error))
+                .then();
     }
 
-
-    private void handleConfirmar(Value value, Message message) {
+    private Mono<Void> handleConfirmar(Message message) {
         logger.info("Pedido confirmado para {}", message.from);
-        // siguiente paso del flujo
-        // por ejemplo: enviar resumen final o pedir direccion/pago
+        return Mono.empty();
     }
 
-    private void handleAgregar(Value value, Message message) {
+    private Mono<Void> handleAgregar(Value value, Message message) {
         logger.info("Usuario quiere agregar otro plato: {}", message.from);
-
-        messageService.sendMessage(
-            new messageTO(value.metadata.phone_number_id, message.from, "menu")
-        ).subscribe(
-            response -> logger.info("Menu reenviado a {}", message.from),
-            error -> logger.error("Error reenviando menu a {}", message.from, error)
-        );
+        return messageService.sendMessage(new messageTO(value.metadata.phone_number_id, message.from, "menu"))
+                .doOnNext(response -> logger.info("Menu reenviado a {}", message.from))
+                .doOnError(error -> logger.error("Error reenviando menu a {}", message.from, error))
+                .then();
     }
 
-    private void handleCancelar(Message message) {
+    private Mono<Void> handleCancelar(Message message) {
         logger.info("Cancelando pedido de {}", message.from);
         menuMemory.remove(message.from);
+        return Mono.empty();
     }
-
-    
 }

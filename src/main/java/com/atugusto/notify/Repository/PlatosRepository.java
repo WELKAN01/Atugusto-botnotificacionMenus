@@ -1,10 +1,10 @@
 package com.atugusto.notify.Repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import com.atugusto.notify.Entity.Platos;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Flux;
 
+public interface PlatosRepository extends ReactiveCrudRepository<Platos, Long> {
 
-public interface PlatosRepository extends JpaRepository<Platos, Long>{
-
+    Flux<Platos> findByDisponibleTrue();
 }

@@ -19,11 +19,13 @@ import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Entity.Platos.Categoria;
 import com.atugusto.notify.Message.MensajeConfirmacion;
 
+import reactor.core.publisher.Flux;
+
 class MessageServiceTest {
 
     @Test
     void sendMessageFailsWhenMetaTokenIsMissing() {
-        MessageService service = new MessageService(WebClient.builder().build(), mock(PlatosService.class), "   ",
+        MessageService service = new MessageService(WebClient.builder().build(), "   ",
                 mock(PlatosDiariosService.class));
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
@@ -36,11 +38,12 @@ class MessageServiceTest {
     @Test
     void sendMessageTemplateWithPlatosBuildsInteractiveMenuFromDailyDishes() throws Exception {
         PlatosDiariosService platosDiariosService = mock(PlatosDiariosService.class);
-        when(platosDiariosService.PlatosDiariosListToday()).thenReturn(List.of(
+        when(platosDiariosService.platosDiariosListToday()).thenReturn(Flux.fromIterable(
+                List.of(
                 new Platos(1L, "Lomo Saltado", Categoria.PRINCIPAL, "Carne salteada", 32.5, true),
-                new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true)));
-
-        MessageService service = new MessageService(WebClient.builder().build(), mock(PlatosService.class), "token",
+                new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true))
+            ));
+        MessageService service = new MessageService(WebClient.builder().build(), "token",
                 platosDiariosService);
 
         @SuppressWarnings("unchecked")
@@ -69,7 +72,7 @@ class MessageServiceTest {
 
     @Test
     void sendMessageTemplateConfirmedBuildsConfirmationOptions() throws Exception {
-        MessageService service = new MessageService(WebClient.builder().build(), mock(PlatosService.class), "token",
+        MessageService service = new MessageService(WebClient.builder().build(), "token",
                 mock(PlatosDiariosService.class));
 
         Map<String, List<Platos>> memory = Map.of(

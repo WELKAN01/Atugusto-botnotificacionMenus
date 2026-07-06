@@ -1,27 +1,19 @@
 package com.atugusto.notify.Entity;
 
-import jakarta.annotation.Generated;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
 
-@Entity
+@Table("platos")
 @Builder
+@AllArgsConstructor
 public class Platos {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String nombre;
 
-    @Enumerated(EnumType.STRING)
     private Categoria categoria;
 
     private String descripcion;
@@ -34,15 +26,6 @@ public class Platos {
     }
 
     public Platos() {
-    }
-
-    public Platos(Long id, String nombre, Categoria categoria, String descripcion, double precio, boolean disponible) {
-        this.id = id;
-        this.nombre = nombre;
-        this.categoria = categoria;
-        this.descripcion = descripcion;
-        this.precio = precio;
-        this.disponible = disponible;
     }
 
     public Long getId() {

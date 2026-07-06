@@ -1,26 +1,23 @@
 package com.atugusto.notify.config;
 
-import java.time.LocalDate;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.data.domain.Example;
-import org.springframework.stereotype.Component;
-
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Entity.PlatosDiarios;
 import com.atugusto.notify.Repository.PlatoDiariosRepository;
 import com.atugusto.notify.Repository.PlatosRepository;
-
+import java.time.LocalDate;
+import java.util.Locale;
 import net.datafaker.Faker;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @Component
-public class Datafaker implements ApplicationRunner{
+public class Datafaker implements ApplicationRunner {
+    private static final Logger logger = LoggerFactory.getLogger(Datafaker.class);
 
     private final PlatosRepository platosRepository;
     private final PlatoDiariosRepository platoDiariosRepository;
@@ -31,48 +28,70 @@ public class Datafaker implements ApplicationRunner{
     }
 
     @Override
-    public void run(ApplicationArguments args) throws Exception {
+    public void run(ApplicationArguments args) {
         Faker faker = new Faker(new Locale("es"));
+        LocalDate today = LocalDate.now();
 
-        if(platosRepository.count() == 0){
-            for (int i = 0; i < 10; i++) {
-                String nombre = faker.food().dish();
-                String descripcion = faker.lorem().sentence();
-                double precio = faker.number().randomDouble(2, 5, 50);
-                String categoria = faker.options().option("ENTRANTE", "PRINCIPAL");
-                boolean disponible = faker.bool().bool();
-                Platos platos = new Platos();
-                platos.setNombre(nombre);
-                platos.setDescripcion(descripcion);
-                platos.setPrecio(precio);
-                platos.setCategoria(Platos.Categoria.valueOf(categoria));
-                platos.setDisponible(disponible);
-                platosRepository.save(platos);
-            }            
-        }
-
-        List<PlatosDiarios> platosDiarios = platoDiariosRepository.findAll();
-        List<PlatosDiarios> platosDiariosHoy = platosDiarios.stream()
-                .filter(platoDiario -> platoDiario.getFec_menu_pedido().equals(LocalDate.now()))
-                .collect(Collectors.toList());
-        System.out.println("Platos diarios para hoy: " + platosDiariosHoy.stream().count());
-        System.out.println("Platos diarios disponibles hoy: " + platosDiariosHoy.isEmpty());
-        Optional<List<PlatosDiarios>> platoDiarioHoy = Optional.ofNullable(platosDiariosHoy);
-
-        long count = platoDiarioHoy.stream().count();
-        if(platosDiariosHoy.isEmpty() || count == 0){
-            System.out.println("No hay platos diarios para hoy, generando platos diarios...");
-            LocalDate date = LocalDate.now();
-            List<Platos> platos = platosRepository.findAll();
-
-            for (Platos plato : platos) {
-                PlatosDiarios platosd = new PlatosDiarios();
-                platosd.setDisponible(true);
-                platosd.setFec_menu_pedido(date);
-                platosd.setPlatos(plato);
-                platoDiariosRepository.save(platosd);
-            }  
-        }
+        seedPlatosIfNeeded(faker)
+                .then(seedMenuTodayIfNeeded(today))
+                .doOnSuccess(unused -> logger.info("Carga inicial reactiva completada"))
+                .doOnError(error -> logger.error("Error durante la carga inicial reactiva", error))
+                .block();
     }
 
+    private Mono<Void> seedPlatosIfNeeded(Faker faker) {
+        return platosRepository.count()
+                .flatMap(count -> {
+                    if (count > 0) {
+                        logger.info("Ya existen {} platos registrados", count);
+                        return Mono.empty();
+                    }
+
+                    logger.info("No existen platos, generando registros iniciales");
+                    return Flux.range(0, 10)
+                            .map(index -> buildRandomPlato(faker))
+                            .flatMap(platosRepository::save)
+                            .then();
+                });
+    }
+
+    private Mono<Void> seedMenuTodayIfNeeded(LocalDate today) {
+        return platoDiariosRepository.existsByFecMenuPedido(today)
+                .flatMap(exists -> {
+                    if (Boolean.TRUE.equals(exists)) {
+                        logger.info("Ya existen platos diarios para {}", today);
+                        return Mono.empty();
+                    }
+
+                    logger.info("No hay platos diarios para {}, generando menu", today);
+                    return platosRepository.findAll()
+                            .map(plato -> buildPlatoDiario(today, plato.getId()))
+                            .flatMap(platoDiariosRepository::save)
+                            .then();
+                });
+    }
+
+    private Platos buildRandomPlato(Faker faker) {
+        String nombre = faker.food().dish();
+        String descripcion = faker.lorem().sentence();
+        double precio = faker.number().randomDouble(2, 5, 50);
+        String categoria = faker.options().option("ENTRANTE", "PRINCIPAL");
+        boolean disponible = faker.bool().bool();
+
+        Platos plato = new Platos();
+        plato.setNombre(nombre);
+        plato.setDescripcion(descripcion);
+        plato.setPrecio(precio);
+        plato.setCategoria(Platos.Categoria.valueOf(categoria));
+        plato.setDisponible(disponible);
+        return plato;
+    }
+
+    private PlatosDiarios buildPlatoDiario(LocalDate today, Long platoId) {
+        PlatosDiarios platoDiario = new PlatosDiarios();
+        platoDiario.setDisponible(true);
+        platoDiario.setFecMenuPedido(today);
+        platoDiario.setPlatoId(platoId);
+        return platoDiario;
+    }
 }
