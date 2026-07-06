@@ -56,11 +56,12 @@ public class Datafaker implements ApplicationRunner{
                 .filter(platoDiario -> platoDiario.getFec_menu_pedido().equals(LocalDate.now()))
                 .collect(Collectors.toList());
         System.out.println("Platos diarios para hoy: " + platosDiariosHoy.stream().count());
-        System.out.println("Platos diarios disponibles hoy: " + platosDiarios.isEmpty());
+        System.out.println("Platos diarios disponibles hoy: " + platosDiariosHoy.isEmpty());
         Optional<List<PlatosDiarios>> platoDiarioHoy = Optional.ofNullable(platosDiariosHoy);
 
-        
-        if(platoDiarioHoy.stream().count() == 0){
+        long count = platoDiarioHoy.stream().count();
+        if(platosDiariosHoy.isEmpty() || count == 0){
+            System.out.println("No hay platos diarios para hoy, generando platos diarios...");
             LocalDate date = LocalDate.now();
             List<Platos> platos = platosRepository.findAll();
 

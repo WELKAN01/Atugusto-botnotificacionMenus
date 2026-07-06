@@ -1,7 +1,9 @@
 package com.atugusto.notify.Business;
 
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -68,9 +70,7 @@ public class WhatsappWebhookService {
         }
 
         if ("text".equals(message.type)) {
-            logger.info("mensaje de bienvenida(muestra de platos)");
             processTextMessage(value, message);
-            sendConfirmationIfOrderExists(value, message);
         }
 
         return Mono.just(EVENT_RECEIVED_RESPONSE);
@@ -151,10 +151,31 @@ public class WhatsappWebhookService {
         logger.info("WhatsApp text message received. from={}, phoneNumberId={}, timestamp={}",
                 from, phoneNumberId, message.timestamp);
 
+        if (!isMenuRequest(messageText)) {
+            logger.info("Text message does not request menu. from={}, text={}", from, messageText);
+            return;
+        }
+
+        logger.info("Menu requested by {}", from);
         messageService.sendMessage(new messageTO(phoneNumberId, from, messageText))
                 .subscribe(
                         response -> logger.info("WhatsApp response sent to {}. Meta response={}", from, response),
                         exception -> logger.error("Error sending WhatsApp response to {}", from, exception));
+    }
+
+    private boolean isMenuRequest(String messageText) {
+        String normalizedText = Normalizer.normalize(messageText, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT)
+                .trim();
+
+        return normalizedText.equals("menu")
+                || normalizedText.equals("hola")
+                || normalizedText.equals("inicio")
+                || normalizedText.equals("empezar")
+                || normalizedText.equals("ver menu")
+                || normalizedText.equals("quiero menu")
+                || normalizedText.equals("quiero ver el menu");
     }
 
     private void logInteractivePayload(WebhookWhatsapp payload, Message message) {
