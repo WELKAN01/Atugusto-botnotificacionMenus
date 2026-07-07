@@ -81,7 +81,7 @@ class WhatsappWebhookServiceTest {
 
     @Test
     void processWebhookSavesSelectionAndSendsConfirmation() {
-        Platos plato = new Platos(7L, "Lomo Saltado", Categoria.PRINCIPAL, "Lomo clasico", 32.0, true);
+        Platos plato = new Platos(7L, "Lomo Saltado", Categoria.PRINCIPAL, "Lomo clasico", 32.0, true,1L);
         WebhookWhatsapp payload = interactivePayload("111222333", "51999999999", "7", "Lomo Saltado", "Lomo clasico");
         when(platosService.findIDPlatos(7L)).thenReturn(Mono.just(plato));
         when(messageService.sendMessageConfirm(any(messageTO.class), any())).thenReturn(Mono.just("ok"));
@@ -116,7 +116,7 @@ class WhatsappWebhookServiceTest {
 
     @Test
     void processWebhookCancelsOrderAndAvoidsConfirmation() {
-        Platos plato = new Platos(7L, "Lomo Saltado", Categoria.PRINCIPAL, "Lomo clasico", 32.0, true);
+        Platos plato = new Platos(7L, "Lomo Saltado", Categoria.PRINCIPAL, "Lomo clasico", 32.0, true,1L);
         WebhookWhatsapp selectedDish = interactivePayload("111222333", "51999999999", "7", "Lomo Saltado", "Lomo clasico");
         when(platosService.findIDPlatos(7L)).thenReturn(Mono.just(plato));
         when(messageService.sendMessageConfirm(any(messageTO.class), any())).thenReturn(Mono.just("ok"));

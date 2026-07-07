@@ -1,6 +1,7 @@
 package com.atugusto.notify.Controller;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,12 +17,14 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/webhook")
 public class WhatsappHookController {
-    private static final String VERIFY_TOKEN = "mi_token_seguro";
-
     private final WhatsappWebhookService whatsappWebhookService;
+    private final String verifyToken;
 
-    public WhatsappHookController(WhatsappWebhookService whatsappWebhookService) {
+    public WhatsappHookController(
+            WhatsappWebhookService whatsappWebhookService,
+            @Value("${meta.whatsapp.verify-token:mi_token_seguro}") String verifyToken) {
         this.whatsappWebhookService = whatsappWebhookService;
+        this.verifyToken = verifyToken;
     }
 
     @PostMapping
@@ -36,7 +39,7 @@ public class WhatsappHookController {
             @RequestParam("hub.verify_token") String token,
             @RequestParam("hub.challenge") String challenge) {
 
-        if ("subscribe".equals(mode) && VERIFY_TOKEN.equals(token)) {
+        if ("subscribe".equals(mode) && verifyToken.equals(token)) {
             return Mono.just(ResponseEntity.ok(challenge));
         }
 

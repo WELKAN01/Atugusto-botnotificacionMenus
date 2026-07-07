@@ -3,6 +3,7 @@ package com.atugusto.notify.Entity;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Table("platos")
@@ -19,6 +20,9 @@ public class Platos {
     private String descripcion;
     private double precio;
     private boolean disponible;
+
+    @Column("empresa_id")
+    private Long empresaId;
     
     public enum Categoria {
         ENTRANTE,
@@ -80,6 +84,14 @@ public class Platos {
     public String toString() {
         return "Platos [id=" + id + ", nombre=" + nombre + ", categoria=" + categoria + ", descripcion=" + descripcion
                 + ", precio=" + precio + ", disponible=" + disponible + "]";
+    }
+
+    public Long getEmpresaId() {
+        return empresaId;
+    }
+
+    public void setEmpresaId(Long empresaId) {
+        this.empresaId = empresaId;
     }
 
 

@@ -15,11 +15,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import com.atugusto.notify.DTO.messageTO;
+import com.atugusto.notify.Entity.Empresa;
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Entity.Platos.Categoria;
 import com.atugusto.notify.Message.MensajeConfirmacion;
 
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 class MessageServiceTest {
 
@@ -37,11 +39,15 @@ class MessageServiceTest {
 
     @Test
     void sendMessageTemplateWithPlatosBuildsInteractiveMenuFromDailyDishes() throws Exception {
+        EmpresaService empresaService = mock(EmpresaService.class);
+        when(empresaService.getOrCreateDefaultEmpresa()).thenReturn(
+            Mono.just(Empresa.demo())
+        );
         PlatosDiariosService platosDiariosService = mock(PlatosDiariosService.class);
         when(platosDiariosService.platosDiariosListToday()).thenReturn(Flux.fromIterable(
                 List.of(
-                new Platos(1L, "Lomo Saltado", Categoria.PRINCIPAL, "Carne salteada", 32.5, true),
-                new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true))
+                new Platos(1L, "Lomo Saltado", Categoria.PRINCIPAL, "Carne salteada", 32.5, true,1L),
+                new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true,1L))
             ));
         MessageService service = new MessageService(WebClient.builder().build(), "token",
                 platosDiariosService);
@@ -72,13 +78,18 @@ class MessageServiceTest {
 
     @Test
     void sendMessageTemplateConfirmedBuildsConfirmationOptions() throws Exception {
+        EmpresaService empresaService = mock(EmpresaService.class);
+        when(empresaService.getOrCreateDefaultEmpresa()).thenReturn(
+            Mono.just(Empresa.demo())
+        );
+        
         MessageService service = new MessageService(WebClient.builder().build(), "token",
                 mock(PlatosDiariosService.class));
 
         Map<String, List<Platos>> memory = Map.of(
                 "51970479585", List.of(
-                        new Platos(1L, "Lomo Saltado", Categoria.PRINCIPAL, "Carne salteada", 32.5, true),
-                        new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true)));
+                        new Platos(1L, "Lomo Saltado", Categoria.PRINCIPAL, "Carne salteada", 32.5, true,1L),
+                        new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true,1L)));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) invokePrivate(service, "sendMessageTemplateConfirmed",

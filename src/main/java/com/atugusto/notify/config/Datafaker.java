@@ -2,6 +2,7 @@ package com.atugusto.notify.config;
 
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Entity.PlatosDiarios;
+import com.atugusto.notify.Service.EmpresaService;
 import com.atugusto.notify.Repository.PlatoDiariosRepository;
 import com.atugusto.notify.Repository.PlatosRepository;
 import java.time.LocalDate;
@@ -18,13 +19,19 @@ import reactor.core.publisher.Mono;
 @Component
 public class Datafaker implements ApplicationRunner {
     private static final Logger logger = LoggerFactory.getLogger(Datafaker.class);
+    private static final long DEFAULT_EMPRESA_ID = EmpresaService.DEFAULT_EMPRESA_ID;
 
     private final PlatosRepository platosRepository;
     private final PlatoDiariosRepository platoDiariosRepository;
+    private final EmpresaService empresaService;
 
-    public Datafaker(PlatosRepository platosRepository, PlatoDiariosRepository platoDiariosRepository) {
+    public Datafaker(
+            PlatosRepository platosRepository,
+            PlatoDiariosRepository platoDiariosRepository,
+            EmpresaService empresaService) {
         this.platosRepository = platosRepository;
         this.platoDiariosRepository = platoDiariosRepository;
+        this.empresaService = empresaService;
     }
 
     @Override
@@ -32,7 +39,8 @@ public class Datafaker implements ApplicationRunner {
         Faker faker = new Faker(new Locale("es"));
         LocalDate today = LocalDate.now();
 
-        seedPlatosIfNeeded(faker)
+        empresaService.getOrCreateDefaultEmpresa()
+                .then(seedPlatosIfNeeded(faker))
                 .then(seedMenuTodayIfNeeded(today))
                 .doOnSuccess(unused -> logger.info("Carga inicial reactiva completada"))
                 .doOnError(error -> logger.error("Error durante la carga inicial reactiva", error))
@@ -40,14 +48,14 @@ public class Datafaker implements ApplicationRunner {
     }
 
     private Mono<Void> seedPlatosIfNeeded(Faker faker) {
-        return platosRepository.count()
+        return platosRepository.countByEmpresaId(DEFAULT_EMPRESA_ID)
                 .flatMap(count -> {
                     if (count > 0) {
-                        logger.info("Ya existen {} platos registrados", count);
+                        logger.info("Ya existen {} platos registrados para la empresa {}", count, DEFAULT_EMPRESA_ID);
                         return Mono.empty();
                     }
 
-                    logger.info("No existen platos, generando registros iniciales");
+                    logger.info("No existen platos para la empresa {}, generando registros iniciales", DEFAULT_EMPRESA_ID);
                     return Flux.range(0, 10)
                             .map(index -> buildRandomPlato(faker))
                             .flatMap(platosRepository::save)
@@ -56,15 +64,16 @@ public class Datafaker implements ApplicationRunner {
     }
 
     private Mono<Void> seedMenuTodayIfNeeded(LocalDate today) {
-        return platoDiariosRepository.existsByFecMenuPedido(today)
+        return platoDiariosRepository.existsByEmpresaIdAndFecMenuPedido(DEFAULT_EMPRESA_ID, today)
                 .flatMap(exists -> {
                     if (Boolean.TRUE.equals(exists)) {
-                        logger.info("Ya existen platos diarios para {}", today);
+                        logger.info("Ya existen platos diarios para la empresa {} en {}", DEFAULT_EMPRESA_ID, today);
                         return Mono.empty();
                     }
 
-                    logger.info("No hay platos diarios para {}, generando menu", today);
-                    return platosRepository.findAll()
+                    logger.info("No hay platos diarios para la empresa {} en {}, generando menu", DEFAULT_EMPRESA_ID,
+                            today);
+                    return platosRepository.findByEmpresaId(DEFAULT_EMPRESA_ID)
                             .map(plato -> buildPlatoDiario(today, plato.getId()))
                             .flatMap(platoDiariosRepository::save)
                             .then();
@@ -84,11 +93,13 @@ public class Datafaker implements ApplicationRunner {
         plato.setPrecio(precio);
         plato.setCategoria(Platos.Categoria.valueOf(categoria));
         plato.setDisponible(disponible);
+        plato.setEmpresaId(DEFAULT_EMPRESA_ID);
         return plato;
     }
 
     private PlatosDiarios buildPlatoDiario(LocalDate today, Long platoId) {
         PlatosDiarios platoDiario = new PlatosDiarios();
+        platoDiario.setEmpresaId(DEFAULT_EMPRESA_ID);
         platoDiario.setDisponible(true);
         platoDiario.setFecMenuPedido(today);
         platoDiario.setPlatoId(platoId);

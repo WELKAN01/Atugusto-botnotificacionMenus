@@ -8,6 +8,8 @@ import reactor.core.publisher.Mono;
 
 @Service
 public class PlatosService {
+    public static final long DEFAULT_EMPRESA_ID = 1L;
+
     private final PlatosRepository platosRepository;
     
     public PlatosService(PlatosRepository platosRepository) {
@@ -15,19 +17,34 @@ public class PlatosService {
     }
 
     public Flux<Platos> findPlatosDisponibles() {
-        return platosRepository.findByDisponibleTrue();
+        return findPlatosDisponibles(DEFAULT_EMPRESA_ID);
+    }
+
+    public Flux<Platos> findPlatosDisponibles(Long empresaId) {
+        return platosRepository.findByEmpresaIdAndDisponibleTrue(empresaId);
     }
         
     public Mono<Platos> savePlato(Platos plato) {
+        if (plato.getEmpresaId() == null) {
+            plato.setEmpresaId(DEFAULT_EMPRESA_ID);
+        }
         return platosRepository.save(plato);
     }
 
     public Mono<Long> getPlatosCantidad() {
-        return platosRepository.count();
+        return getPlatosCantidad(DEFAULT_EMPRESA_ID);
+    }
+
+    public Mono<Long> getPlatosCantidad(Long empresaId) {
+        return platosRepository.countByEmpresaId(empresaId);
     }
 
     public Mono<Platos> findIDPlatos(Long id) {
-        return platosRepository.findById(id);
+        return findIDPlatos(DEFAULT_EMPRESA_ID, id);
+    }
+
+    public Mono<Platos> findIDPlatos(Long empresaId, Long id) {
+        return platosRepository.findByIdAndEmpresaId(id, empresaId);
     }
 }
 

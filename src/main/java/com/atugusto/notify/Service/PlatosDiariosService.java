@@ -10,6 +10,7 @@ import reactor.core.publisher.Mono;
 
 @Service
 public class PlatosDiariosService {
+    public static final long DEFAULT_EMPRESA_ID = 1L;
     
     private final PlatoDiariosRepository platosdiariosrepository;
 
@@ -18,7 +19,11 @@ public class PlatosDiariosService {
     }
 
     public Flux<Platos> platosDiariosListToday() {
-        return platosdiariosrepository.findPlatosHoy(LocalDate.now());
+        return platosDiariosListToday(DEFAULT_EMPRESA_ID);
+    }
+
+    public Flux<Platos> platosDiariosListToday(Long empresaId) {
+        return platosdiariosrepository.findPlatosHoy(empresaId, LocalDate.now());
     }
 
     public Flux<PlatosDiarios> platosDiariosListAll() {
@@ -26,10 +31,17 @@ public class PlatosDiariosService {
     }
 
     public Mono<PlatosDiarios> platosDiariosSave(PlatosDiarios pd) {
+        if (pd.getEmpresaId() == null) {
+            pd.setEmpresaId(DEFAULT_EMPRESA_ID);
+        }
         return platosdiariosrepository.save(pd);
     }
 
     public Mono<Boolean> existsMenuForDate(LocalDate date) {
-        return platosdiariosrepository.existsByFecMenuPedido(date);
+        return existsMenuForDate(DEFAULT_EMPRESA_ID, date);
+    }
+
+    public Mono<Boolean> existsMenuForDate(Long empresaId, LocalDate date) {
+        return platosdiariosrepository.existsByEmpresaIdAndFecMenuPedido(empresaId, date);
     }
 }

@@ -3,11 +3,12 @@ package com.atugusto.notify.Controller;
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Service.PlatosService;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.GetMapping;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -21,8 +22,9 @@ public class Platoscontroller {
     }
     
     @GetMapping()
-    public Flux<Platos> getPlatosDisponibles() {
-        return platosService.findPlatosDisponibles();
+    public Flux<Platos> getPlatosDisponibles(
+            @RequestParam(name = "empresaId", defaultValue = "1") Long empresaId) {
+        return platosService.findPlatosDisponibles(empresaId);
     }
 
     @PostMapping()
