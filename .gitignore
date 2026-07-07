@@ -20,6 +20,11 @@ target/
 *.ipr
 *.properties
 
+.env.*
+.env
+/docker/postgres/
+
+
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/

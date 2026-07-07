@@ -62,34 +62,35 @@ La configuracion actual esta en `src/main/resources/application.properties`:
 
 ```properties
 spring.application.name=notify
-server.port=8090
-spring.datasource.url=jdbc:postgresql://IP/NOMBRE_PROYECTO
-spring.datasource.username=postgres
-spring.datasource.password=123456
-spring.datasource.driver-class-name=org.postgresql.Driver
-spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
+server.port=${SERVER_PORT:8090}
+spring.r2dbc.url=${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5432/atugusto}
+spring.r2dbc.username=${SPRING_R2DBC_USERNAME:postgres}
+spring.r2dbc.password=${SPRING_R2DBC_PASSWORD:123456}
+meta.whatsapp.token=${META_WHATSAPP_TOKEN:}
+meta.whatsapp.verify-token=${META_WHATSAPP_VERIFY_TOKEN:mi_token_seguro}
 ```
 
 Antes de ejecutar el proyecto, asegurate de tener una base de datos PostgreSQL llamada `atugusto` disponible localmente.
 
 > Nota: las credenciales de base de datos y el token de verificacion del webhook tambien deberian moverse a variables de entorno o secretos antes de usar el proyecto en produccion.
 
-### Configurar token de Meta
+### Configurar tokens y secretos
 
 El token de WhatsApp Cloud API se lee directamente desde la variable de entorno `META_WHATSAPP_TOKEN`.
+El token de verificacion del webhook se puede configurar con `META_WHATSAPP_VERIFY_TOKEN`.
 
 En PowerShell:
 
 ```powershell
 $env:META_WHATSAPP_TOKEN="TU_TOKEN_DE_META"
+$env:META_WHATSAPP_VERIFY_TOKEN="mi_token_seguro"
 ```
 
 En CMD:
 
 ```cmd
 set META_WHATSAPP_TOKEN=TU_TOKEN_DE_META
+set META_WHATSAPP_VERIFY_TOKEN=mi_token_seguro
 ```
 
 Luego ejecuta la aplicacion desde esa misma terminal.
@@ -112,6 +113,53 @@ La aplicacion levanta por defecto en:
 
 ```text
 http://localhost:8090
+```
+
+## Docker
+
+La forma mas simple de levantar todo el stack es con Docker Compose. Se incluyen:
+
+- una imagen de aplicacion basada en Java 17
+- una imagen de PostgreSQL 16
+- un script de inicializacion SQL para crear las tablas `platos` y `platos_diarios`
+
+### Variables de entorno
+
+Puedes copiar `.env.example` a `.env` y completar los valores sensibles:
+
+```env
+APP_PORT=8090
+POSTGRES_PORT=5432
+POSTGRES_DB=atugusto
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=123456
+META_WHATSAPP_TOKEN=TU_TOKEN_DE_META
+META_WHATSAPP_VERIFY_TOKEN=mi_token_seguro
+OPENAI_API_KEY=
+```
+
+### Levantar servicios
+
+```bash
+docker compose up --build
+```
+
+La API quedara disponible en:
+
+```text
+http://localhost:8090
+```
+
+### Detener servicios
+
+```bash
+docker compose down
+```
+
+Si tambien quieres eliminar el volumen de datos de PostgreSQL:
+
+```bash
+docker compose down -v
 ```
 
 ## Exponer webhook local con ngrok
