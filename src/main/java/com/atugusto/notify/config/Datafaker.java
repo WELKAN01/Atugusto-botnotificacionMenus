@@ -64,7 +64,7 @@ public class Datafaker implements ApplicationRunner {
     }
 
     private Mono<Void> seedMenuTodayIfNeeded(LocalDate today) {
-        return platoDiariosRepository.existsByEmpresaIdAndFecMenuPedido(DEFAULT_EMPRESA_ID, today)
+        return platoDiariosRepository.existsByEmpresaAndFecMenuPedido(DEFAULT_EMPRESA_ID, today)
                 .flatMap(exists -> {
                     if (Boolean.TRUE.equals(exists)) {
                         logger.info("Ya existen platos diarios para la empresa {} en {}", DEFAULT_EMPRESA_ID, today);
@@ -99,7 +99,6 @@ public class Datafaker implements ApplicationRunner {
 
     private PlatosDiarios buildPlatoDiario(LocalDate today, Long platoId) {
         PlatosDiarios platoDiario = new PlatosDiarios();
-        platoDiario.setEmpresaId(DEFAULT_EMPRESA_ID);
         platoDiario.setDisponible(true);
         platoDiario.setFecMenuPedido(today);
         platoDiario.setPlatoId(platoId);

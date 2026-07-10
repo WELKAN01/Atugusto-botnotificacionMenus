@@ -16,12 +16,23 @@ public interface PlatoDiariosRepository extends ReactiveCrudRepository<PlatosDia
             FROM platos_diarios pd
             JOIN platos p ON p.id = pd.plato_id
             WHERE pd.fec_menu_pedido = :fecha
-              AND pd.empresa_id = :empresaId
+              AND p.empresa_id = :empresaId
               AND pd.disponible = true
             """)
     Flux<Platos> findPlatosHoy(@Param("empresaId") Long empresaId, @Param("fecha") LocalDate fecha);
 
     Mono<Boolean> existsByFecMenuPedido(LocalDate fecMenuPedido);
 
-    Mono<Boolean> existsByEmpresaIdAndFecMenuPedido(Long empresaId, LocalDate fecMenuPedido);
+    @Query("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM platos_diarios pd
+                JOIN platos p ON p.id = pd.plato_id
+                WHERE p.empresa_id = :empresaId
+                  AND pd.fec_menu_pedido = :fecMenuPedido
+            )
+            """)
+    Mono<Boolean> existsByEmpresaAndFecMenuPedido(
+            @Param("empresaId") Long empresaId,
+            @Param("fecMenuPedido") LocalDate fecMenuPedido);
 }

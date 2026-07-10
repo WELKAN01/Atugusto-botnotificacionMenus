@@ -31,9 +31,6 @@ public class PlatosDiariosService {
     }
 
     public Mono<PlatosDiarios> platosDiariosSave(PlatosDiarios pd) {
-        if (pd.getEmpresaId() == null) {
-            pd.setEmpresaId(DEFAULT_EMPRESA_ID);
-        }
         return platosdiariosrepository.save(pd);
     }
 
@@ -42,6 +39,6 @@ public class PlatosDiariosService {
     }
 
     public Mono<Boolean> existsMenuForDate(Long empresaId, LocalDate date) {
-        return platosdiariosrepository.existsByEmpresaIdAndFecMenuPedido(empresaId, date);
+        return platosdiariosrepository.existsByEmpresaAndFecMenuPedido(empresaId, date);
     }
 }

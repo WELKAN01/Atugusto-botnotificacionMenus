@@ -16,8 +16,6 @@ public class PlatosDiarios {
     @Id
     private Long id;
 
-    @Column("empresa_id")
-    private Long empresaId;
     
     @Column("fec_menu_pedido")
     private LocalDate fecMenuPedido;
