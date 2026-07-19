@@ -49,6 +49,15 @@ public class MessageService {
                 .flatMap(body -> sendToMeta(message.getPhone_number_id(), body));
     }
 
+    public Mono<String> sendOrderSaved(messageTO message, List<Platos> platosSeleccionados) {
+        if (metaWhatsappToken == null || metaWhatsappToken.isBlank()) {
+            return Mono.error(new IllegalStateException("META_WHATSAPP_TOKEN is not configured"));
+        }
+
+        return Mono.fromSupplier(() -> buildSavedOrderMessage(message, platosSeleccionados))
+                .flatMap(body -> sendToMeta(message.getPhone_number_id(), body));
+    }
+
     private Mono<String> sendToMeta(String phoneNumberId, Map<String, Object> body) {
         return webclient.post()
                 .uri(String.format("https://graph.facebook.com/v25.0/%s/messages", phoneNumberId))
@@ -86,7 +95,7 @@ public class MessageService {
                             "type", "interactive",
                             "interactive", Map.of(
                                     "type", "list",
-                                    "body", Map.of("text", "🍽️ Menú de hoy"),
+                                    "body", Map.of("text", "Menu de hoy"),
                                     "action", Map.of(
                                             "button", "Ver platos",
                                             "sections", List.of(
@@ -98,8 +107,14 @@ public class MessageService {
 
     private Map<String, Object> sendMessageTemplateConfirmed(messageTO message, Map<String, List<Platos>> menusChoosed) {
         String menulist = menusChoosed.getOrDefault(message.getPhoneNumber(), List.of()).stream()
-                .map(Platos::getDescripcion)
-                .collect(Collectors.joining("\n• ", "• ", ""));
+                .map(plato -> String.format("%s - S/ %.2f", plato.getNombre(), plato.getPrecio()))
+                .collect(Collectors.joining("\n- "));
+
+        if (menulist.isBlank()) {
+            menulist = "No hay platos seleccionados todavia.";
+        } else {
+            menulist = "- " + menulist;
+        }
 
         return Map.of(
                 "messaging_product", "whatsapp",
@@ -107,12 +122,28 @@ public class MessageService {
                 "type", "interactive",
                 "interactive", Map.of(
                         "type", "list",
-                        "body", Map.of("text", "🍽️ Menú escogido: " + menulist),
+                        "body", Map.of("text", "Menu escogido:\n" + menulist),
                         "action", Map.of(
-                                "button", "¿que realizar?",
+                                "button", "Que realizar?",
                                 "sections", List.of(
                                         Map.of(
                                                 "title", "Pedido",
                                                 "rows", MensajeConfirmacion.obtenerLista())))));
+    }
+
+    private Map<String, Object> buildSavedOrderMessage(messageTO message, List<Platos> platosSeleccionados) {
+        String detallePedido = platosSeleccionados.stream()
+                .map(plato -> String.format("- %s - S/ %.2f", plato.getNombre(), plato.getPrecio()))
+                .collect(Collectors.joining("\n"));
+
+        String texto = detallePedido.isBlank()
+                ? "Tu pedido fue confirmado."
+                : "Tu pedido fue confirmado con estos platos:\n" + detallePedido;
+
+        return Map.of(
+                "messaging_product", "whatsapp",
+                "to", message.getPhoneNumber(),
+                "type", "text",
+                "text", Map.of("body", texto));
     }
 }
