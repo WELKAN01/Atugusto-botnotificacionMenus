@@ -8,27 +8,23 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.atugusto.notify.DTO.WebhookWhatsapp;
+import com.atugusto.notify.DTO.messageTO;
+import com.atugusto.notify.Entity.Platos;
+import com.atugusto.notify.Entity.Platos.Categoria;
+import com.atugusto.notify.Message.MensajeConfirmacion;
+import com.atugusto.notify.Service.MenuMemoryService;
+import com.atugusto.notify.Service.MessageService;
+import com.atugusto.notify.Service.PlatosService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import com.atugusto.notify.DTO.WebhookWhatsapp;
-import com.atugusto.notify.DTO.messageTO;
-import com.atugusto.notify.Entity.Platos;
-import com.atugusto.notify.Entity.Platos.Categoria;
-import com.atugusto.notify.Message.MensajeConfirmacion;
-import com.atugusto.notify.Service.MessageService;
-import com.atugusto.notify.Service.PlatosDiariosService;
-import com.atugusto.notify.Service.PlatosService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -42,13 +38,13 @@ class WhatsappWebhookServiceTest {
     private PlatosService platosService;
 
     @Mock
-    private PlatosDiariosService platosDiariosService;
+    private MenuMemoryService menuMemoryService;
 
     private WhatsappWebhookService service;
 
     @BeforeEach
     void setUp() {
-        service = new WhatsappWebhookService(messageService, new ObjectMapper(), platosService);
+        service = new WhatsappWebhookService(messageService, new ObjectMapper(), platosService, menuMemoryService);
     }
 
     @Test
@@ -57,8 +53,8 @@ class WhatsappWebhookServiceTest {
         when(messageService.sendMessage(any(messageTO.class))).thenReturn(Mono.just("ok"));
 
         Duration response = StepVerifier.create(service.processWebhook(payload))
-                            .expectNext("EVENT_RECEIVED")
-                            .verifyComplete();
+                .expectNext("EVENT_RECEIVED")
+                .verifyComplete();
 
         System.out.println("Response duration: " + response.toMillis() + " ms");
         ArgumentCaptor<messageTO> messageCaptor = ArgumentCaptor.forClass(messageTO.class);
@@ -81,22 +77,25 @@ class WhatsappWebhookServiceTest {
 
     @Test
     void processWebhookSavesSelectionAndSendsConfirmation() {
-        Platos plato = new Platos(7L, "Lomo Saltado", Categoria.PRINCIPAL, "Lomo clasico", 32.0, true,1L);
+        Platos plato = new Platos(7L, "Lomo Saltado", Categoria.PRINCIPAL, "Lomo clasico", 32.0, true, 1L);
         WebhookWhatsapp payload = interactivePayload("111222333", "51999999999", "7", "Lomo Saltado", "Lomo clasico");
         when(platosService.findIDPlatos(7L)).thenReturn(Mono.just(plato));
+        when(menuMemoryService.getMenu("51999999999"))
+                .thenReturn(Mono.just(List.of()), Mono.just(List.of(plato)));
+        when(menuMemoryService.addPlato(eq("51999999999"), eq(plato))).thenReturn(Mono.just(List.of(plato)));
         when(messageService.sendMessageConfirm(any(messageTO.class), any())).thenReturn(Mono.just("ok"));
 
         String response = service.processWebhook(payload).block();
 
         ArgumentCaptor<messageTO> messageCaptor = ArgumentCaptor.forClass(messageTO.class);
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, List<Platos>>> memoryCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<List<Platos>> platosCaptor = ArgumentCaptor.forClass(List.class);
 
-        verify(messageService).sendMessageConfirm(messageCaptor.capture(), memoryCaptor.capture());
+        verify(messageService).sendMessageConfirm(messageCaptor.capture(), platosCaptor.capture());
         assertEquals("EVENT_RECEIVED", response);
         assertEquals("111222333", messageCaptor.getValue().getPhone_number_id());
         assertEquals("51999999999", messageCaptor.getValue().getPhoneNumber());
-        assertSame(plato, memoryCaptor.getValue().get("51999999999").get(0));
+        assertSame(plato, platosCaptor.getValue().get(0));
     }
 
     @Test
@@ -116,10 +115,14 @@ class WhatsappWebhookServiceTest {
 
     @Test
     void processWebhookCancelsOrderAndAvoidsConfirmation() {
-        Platos plato = new Platos(7L, "Lomo Saltado", Categoria.PRINCIPAL, "Lomo clasico", 32.0, true,1L);
+        Platos plato = new Platos(7L, "Lomo Saltado", Categoria.PRINCIPAL, "Lomo clasico", 32.0, true, 1L);
         WebhookWhatsapp selectedDish = interactivePayload("111222333", "51999999999", "7", "Lomo Saltado", "Lomo clasico");
         when(platosService.findIDPlatos(7L)).thenReturn(Mono.just(plato));
+        when(menuMemoryService.getMenu("51999999999"))
+                .thenReturn(Mono.just(List.of()), Mono.just(List.of(plato)));
+        when(menuMemoryService.addPlato(eq("51999999999"), eq(plato))).thenReturn(Mono.just(List.of(plato)));
         when(messageService.sendMessageConfirm(any(messageTO.class), any())).thenReturn(Mono.just("ok"));
+        when(menuMemoryService.removeMenu("51999999999")).thenReturn(Mono.empty());
 
         service.processWebhook(selectedDish).block();
 
@@ -130,6 +133,7 @@ class WhatsappWebhookServiceTest {
         assertEquals("EVENT_RECEIVED", response);
         verify(messageService).sendMessageConfirm(any(messageTO.class), any());
         verify(messageService, never()).sendMessage(any(messageTO.class));
+        verify(menuMemoryService).removeMenu("51999999999");
     }
 
     private WebhookWhatsapp textPayload(String phoneNumberId, String from, String body) {

@@ -6,20 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.List;
-import java.util.Map;
-
-import org.junit.jupiter.api.Test;
-import org.springframework.web.reactive.function.client.WebClient;
-
 import com.atugusto.notify.DTO.messageTO;
 import com.atugusto.notify.Entity.Empresa;
 import com.atugusto.notify.Entity.Platos;
 import com.atugusto.notify.Entity.Platos.Categoria;
 import com.atugusto.notify.Message.MensajeConfirmacion;
-
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -32,7 +29,7 @@ class MessageServiceTest {
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
                 () -> service.sendMessage(new messageTO("4361450264132587", "51970479585", "hola")).block());
-        
+
         System.out.println("Exception message: " + exception.getMessage());
         assertEquals("META_WHATSAPP_TOKEN is not configured", exception.getMessage());
     }
@@ -41,20 +38,21 @@ class MessageServiceTest {
     void sendMessageTemplateWithPlatosBuildsInteractiveMenuFromDailyDishes() throws Exception {
         EmpresaService empresaService = mock(EmpresaService.class);
         when(empresaService.getOrCreateDefaultEmpresa()).thenReturn(
-            Mono.just(Empresa.demo())
-        );
+                Mono.just(Empresa.demo()));
         PlatosDiariosService platosDiariosService = mock(PlatosDiariosService.class);
         when(platosDiariosService.platosDiariosListToday()).thenReturn(Flux.fromIterable(
                 List.of(
-                new Platos(1L, "Lomo Saltado", Categoria.PRINCIPAL, "Carne salteada", 32.5, true,1L),
-                new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true,1L))
-            ));
+                        new Platos(1L, "Lomo Saltado", Categoria.PRINCIPAL, "Carne salteada", 32.5, true, 1L),
+                        new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true, 1L))));
         MessageService service = new MessageService(WebClient.builder().build(), "token",
                 platosDiariosService);
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> body = (Map<String, Object>) invokePrivate(service, "sendMessageTemplateWithPlatos",
+        Mono<Map<String, Object>> bodyPublisher = (Mono<Map<String, Object>>) invokePrivate(
+                service,
+                "sendMessageTemplateWithPlatos",
                 new messageTO("4361450264132587", "51970479585", "menu"));
+        Map<String, Object> body = bodyPublisher.block();
 
         assertEquals("whatsapp", body.get("messaging_product"));
         assertEquals("51970479585", body.get("to"));
@@ -80,16 +78,14 @@ class MessageServiceTest {
     void sendMessageTemplateConfirmedBuildsConfirmationOptions() throws Exception {
         EmpresaService empresaService = mock(EmpresaService.class);
         when(empresaService.getOrCreateDefaultEmpresa()).thenReturn(
-            Mono.just(Empresa.demo())
-        );
-        
+                Mono.just(Empresa.demo()));
+
         MessageService service = new MessageService(WebClient.builder().build(), "token",
                 mock(PlatosDiariosService.class));
 
-        Map<String, List<Platos>> memory = Map.of(
-                "51970479585", List.of(
-                        new Platos(1L, "Lomo Saltado", Categoria.PRINCIPAL, "Carne salteada", 32.5, true,1L),
-                        new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true,1L)));
+        List<Platos> memory = List.of(
+                new Platos(1L, "Lomo Saltado", Categoria.PRINCIPAL, "Carne salteada", 32.5, true, 1L),
+                new Platos(2L, "Aji de Gallina", Categoria.PRINCIPAL, "Crema de aji amarillo", 28.0, true, 1L));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) invokePrivate(service, "sendMessageTemplateConfirmed",
@@ -106,8 +102,8 @@ class MessageServiceTest {
         @SuppressWarnings("unchecked")
         List<Map<String, String>> rows = (List<Map<String, String>>) sections.get(0).get("rows");
 
-        assertTrue(bodyText.get("text").contains("Carne salteada"));
-        assertTrue(bodyText.get("text").contains("Crema de aji amarillo"));
+        assertTrue(bodyText.get("text").contains("Lomo Saltado - S/ 32.50"));
+        assertTrue(bodyText.get("text").contains("Aji de Gallina - S/ 28.00"));
         assertEquals(MensajeConfirmacion.obtenerLista(), rows);
     }
 

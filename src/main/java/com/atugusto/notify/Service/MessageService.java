@@ -40,12 +40,12 @@ public class MessageService {
                 .flatMap(body -> sendToMeta(message.getPhone_number_id(), body));
     }
 
-    public Mono<String> sendMessageConfirm(messageTO message, Map<String, List<Platos>> memory) {
+    public Mono<String> sendMessageConfirm(messageTO message, List<Platos> platosSeleccionados) {
         if (metaWhatsappToken == null || metaWhatsappToken.isBlank()) {
             return Mono.error(new IllegalStateException("META_WHATSAPP_TOKEN is not configured"));
         }
 
-        return Mono.fromSupplier(() -> sendMessageTemplateConfirmed(message, memory))
+        return Mono.fromSupplier(() -> sendMessageTemplateConfirmed(message, platosSeleccionados))
                 .flatMap(body -> sendToMeta(message.getPhone_number_id(), body));
     }
 
@@ -105,8 +105,8 @@ public class MessageService {
                 });
     }
 
-    private Map<String, Object> sendMessageTemplateConfirmed(messageTO message, Map<String, List<Platos>> menusChoosed) {
-        String menulist = menusChoosed.getOrDefault(message.getPhoneNumber(), List.of()).stream()
+    private Map<String, Object> sendMessageTemplateConfirmed(messageTO message, List<Platos> platosSeleccionados) {
+        String menulist = platosSeleccionados.stream()
                 .map(plato -> String.format("%s - S/ %.2f", plato.getNombre(), plato.getPrecio()))
                 .collect(Collectors.joining("\n- "));
 
